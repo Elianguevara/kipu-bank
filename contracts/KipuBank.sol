@@ -4,114 +4,114 @@ pragma solidity ^0.8.28;
 /**
  * @title KipuBank
  * @author Victor Elian Guevara
- * @notice Este contrato permite a los usuarios depositar y retirar ETH en una bóveda personal,
- * con límites de retiro y un tope de depósito global para el banco.
- * @dev Implementa el patrón checks-effects-interactions y utiliza errores personalizados.
+ * @notice This contract allows users to deposit and withdraw ETH into a personal vault,
+ * with withdrawal limits and a global deposit cap for the entire bank.
+ * @dev Implements the checks-effects-interactions pattern and uses custom errors.
  */
 contract KipuBank {
     // ==============================================================================
-    // Variables de Estado
+    // State Variables
     // ==============================================================================
 
     /**
-     * @notice Límite máximo de ETH que se puede retirar en una sola transacción.
-     * @dev Se establece en el constructor y no puede ser modificado.
+     * @notice Maximum amount of ETH that can be withdrawn in a single transaction.
+     * @dev Set in the constructor and cannot be modified.
      */
     uint256 public immutable withdrawalThreshold;
 
     /**
-     * @notice Límite máximo de ETH que el banco puede tener en total.
-     * @dev Se establece en el constructor y no puede ser modificado.
+     * @notice Maximum amount of ETH the bank can hold in total.
+     * @dev Set in the constructor and cannot be modified.
      */
     uint256 public immutable bankCap;
 
     /**
-     * @notice Versión del contrato.
-     * @dev Variable constante que identifica la versión actual del contrato.
+     * @notice Contract version.
+     * @dev Constant variable identifying the current version of the contract.
      */
     string public constant VERSION = "1.0.0";
 
     /**
-     * @notice Mapeo de la dirección de un usuario al saldo de su bóveda personal.
-     * @dev Rastrea el balance individual de cada usuario en el banco.
+     * @notice Mapping from user address to their personal vault balance.
+     * @dev Tracks the individual balance of each user in the bank.
      */
     mapping(address => uint256) public vaultBalances;
 
     /**
-     * @notice Contador total de depósitos realizados en el contrato.
-     * @dev Se incrementa con cada depósito exitoso.
+     * @notice Total count of deposits made to the contract.
+     * @dev Incremented with each successful deposit.
      */
     uint256 public depositCount;
 
     /**
-     * @notice Contador total de retiros realizados en el contrato.
-     * @dev Se incrementa con cada retiro exitoso.
+     * @notice Total count of withdrawals made from the contract.
+     * @dev Incremented with each successful withdrawal.
      */
     uint256 public withdrawalCount;
 
     // ==============================================================================
-    // Eventos
+    // Events
     // ==============================================================================
 
     /**
-     * @notice Se emite cuando un usuario realiza un depósito exitoso.
-     * @param user La dirección del usuario que deposita.
-     * @param amount La cantidad de ETH depositada.
+     * @notice Emitted when a user makes a successful deposit.
+     * @param user The address of the depositing user.
+     * @param amount The amount of ETH deposited.
      */
     event Deposit(address indexed user, uint256 amount);
 
     /**
-     * @notice Se emite cuando un usuario realiza un retiro exitoso.
-     * @param user La dirección del usuario que retira.
-     * @param amount La cantidad de ETH retirada.
+     * @notice Emitted when a user makes a successful withdrawal.
+     * @param user The address of the withdrawing user.
+     * @param amount The amount of ETH withdrawn.
      */
     event Withdrawal(address indexed user, uint256 amount);
 
     // ==============================================================================
-    // Errores Personalizados
+    // Custom Errors
     // ==============================================================================
 
     /**
-     * @notice Error: El monto del depósito debe ser mayor que cero.
+     * @notice Error: The deposit amount must be greater than zero.
      */
     error KipuBank__ZeroDeposit();
 
     /**
-     * @notice Error: El depósito excede el límite de capacidad del banco.
-     * @param availableSpace El espacio disponible restante en el banco.
+     * @notice Error: Deposit exceeds the bank's capacity limit.
+     * @param availableSpace The remaining available space in the bank.
      */
     error KipuBank__BankCapExceeded(uint256 availableSpace);
 
     /**
-     * @notice Error: El monto del retiro debe ser mayor que cero.
+     * @notice Error: The withdrawal amount must be greater than zero.
      */
     error KipuBank__ZeroWithdrawal();
 
     /**
-     * @notice Error: Fondos insuficientes en la bóveda para el retiro.
-     * @param balance El saldo actual del usuario.
+     * @notice Error: Insufficient funds in the user's vault for withdrawal.
+     * @param balance The current balance of the user.
      */
     error KipuBank__InsufficientFunds(uint256 balance);
 
     /**
-     * @notice Error: El monto del retiro excede el umbral por transacción.
-     * @param threshold El umbral máximo permitido para retiros.
+     * @notice Error: The withdrawal amount exceeds the per-transaction threshold.
+     * @param threshold The maximum allowed withdrawal threshold.
      */
     error KipuBank__WithdrawalThresholdExceeded(uint256 threshold);
 
     /**
-     * @notice Error: La transferencia de ETH falló.
-     * @param reason La razón del fallo en formato bytes.
+     * @notice Error: ETH transfer failed.
+     * @param reason The failure reason in bytes format.
      */
     error KipuBank__TransferFailed(bytes reason);
 
     // ==============================================================================
-    // Modificadores
+    // Modifiers
     // ==============================================================================
 
     /**
-     * @notice Modificador para verificar que el monto enviado sea mayor que cero.
-     * @dev Valida que msg.value > 0 antes de ejecutar la función.
+     * @notice Modifier to ensure the sent value is greater than zero.
+     * @dev Validates that msg.value > 0 before executing the function.
      */
     modifier nonZeroValue() {
         if (msg.value == 0) {
@@ -125,9 +125,9 @@ contract KipuBank {
     // ==============================================================================
 
     /**
-     * @notice Inicializa el contrato con los límites de retiro y capacidad del banco.
-     * @param _withdrawalThreshold El límite de retiro por transacción.
-     * @param _bankCap El límite total de depósitos del banco.
+     * @notice Initializes the contract with withdrawal and capacity limits.
+     * @param _withdrawalThreshold Withdrawal limit per transaction.
+     * @param _bankCap Total deposit capacity of the bank.
      */
     constructor(uint256 _withdrawalThreshold, uint256 _bankCap) {
         withdrawalThreshold = _withdrawalThreshold;
@@ -135,13 +135,13 @@ contract KipuBank {
     }
 
     // ==============================================================================
-    // Funciones Externas
+    // External Functions
     // ==============================================================================
 
     /**
-     * @notice Permite a un usuario depositar ETH en su bóveda.
-     * @dev La función es 'payable' para poder recibir ETH.
-     * Sigue el patrón 'checks-effects-interactions'.
+     * @notice Allows a user to deposit ETH into their vault.
+     * @dev The function is 'payable' to receive ETH.
+     * Follows the 'checks-effects-interactions' pattern.
      */
     function deposit() external payable nonZeroValue {
         // --- Checks ---
@@ -158,15 +158,15 @@ contract KipuBank {
         depositCount++;
 
         // --- Interactions ---
-        // (No hay interacciones externas en esta función)
+        // (No external interactions in this function)
 
         emit Deposit(msg.sender, msg.value);
     }
 
     /**
-     * @notice Permite a un usuario retirar ETH de su bóveda.
-     * @param _amount La cantidad de ETH a retirar.
-     * @dev Sigue el patrón 'checks-effects-interactions'.
+     * @notice Allows a user to withdraw ETH from their vault.
+     * @param _amount The amount of ETH to withdraw.
+     * @dev Follows the 'checks-effects-interactions' pattern.
      */
     function withdraw(uint256 _amount) external {
         // --- Checks ---
@@ -194,36 +194,36 @@ contract KipuBank {
     }
 
     // ==============================================================================
-    // Funciones de Vista (View)
+    // View Functions
     // ==============================================================================
 
     /**
-     * @notice Devuelve el saldo de la bóveda de un usuario específico.
-     * @param _user La dirección del usuario.
-     * @return El saldo en wei del usuario especificado.
+     * @notice Returns the vault balance of a specific user.
+     * @param _user The address of the user.
+     * @return The balance in wei of the specified user.
      */
     function getVaultBalance(address _user) external view returns (uint256) {
         return vaultBalances[_user];
     }
 
     /**
-     * @notice Devuelve el balance total del contrato.
-     * @return El balance total en wei que tiene el contrato.
+     * @notice Returns the total balance of the contract.
+     * @return The total balance in wei held by the contract.
      */
     function getTotalBalance() external view returns (uint256) {
         return address(this).balance;
     }
 
     // ==============================================================================
-    // Funciones Privadas
+    // Private Functions
     // ==============================================================================
 
     /**
-     * @notice Transfiere ETH de forma segura a una dirección.
-     * @dev Función privada para manejar la lógica de transferencia.
-     * Utiliza call de bajo nivel para mayor seguridad.
-     * @param _to La dirección a la que se enviará el ETH.
-     * @param _amount La cantidad a enviar.
+     * @notice Safely transfers ETH to a given address.
+     * @dev Private function to handle transfer logic.
+     * Uses low-level call for greater security.
+     * @param _to The recipient address.
+     * @param _amount The amount to send.
      */
     function _safeTransfer(address _to, uint256 _amount) private {
         (bool success, bytes memory data) = _to.call{value: _amount}("");
