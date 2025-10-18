@@ -10,7 +10,7 @@ pragma solidity ^0.8.28;
  */
 contract KipuBank {
     // ==============================================================================
-    // State Variables
+    // Variables inmutables || constantes
     // ==============================================================================
 
     /**
@@ -31,11 +31,9 @@ contract KipuBank {
      */
     string public constant VERSION = "1.0.0";
 
-    /**
-     * @notice Mapping from user address to their personal vault balance.
-     * @dev Tracks the individual balance of each user in the bank.
-     */
-    mapping(address => uint256) public vaultBalances;
+    // ==============================================================================
+    // Variables de almacenamiento
+    // ==============================================================================
 
     /**
      * @notice Total count of deposits made to the contract.
@@ -50,7 +48,17 @@ contract KipuBank {
     uint256 public withdrawalCount;
 
     // ==============================================================================
-    // Events
+    // Mapping
+    // ==============================================================================
+
+    /**
+     * @notice Mapping from user address to their personal vault balance.
+     * @dev Tracks the individual balance of each user in the bank.
+     */
+    mapping(address => uint256) public vaultBalances;
+
+    // ==============================================================================
+    // Eventos
     // ==============================================================================
 
     /**
@@ -68,7 +76,7 @@ contract KipuBank {
     event Withdrawal(address indexed user, uint256 amount);
 
     // ==============================================================================
-    // Custom Errors
+    // Errores personalizados
     // ==============================================================================
 
     /**
@@ -106,21 +114,6 @@ contract KipuBank {
     error KipuBank__TransferFailed(bytes reason);
 
     // ==============================================================================
-    // Modifiers
-    // ==============================================================================
-
-    /**
-     * @notice Modifier to ensure the sent value is greater than zero.
-     * @dev Validates that msg.value > 0 before executing the function.
-     */
-    modifier nonZeroValue() {
-        if (msg.value == 0) {
-            revert KipuBank__ZeroDeposit();
-        }
-        _;
-    }
-
-    // ==============================================================================
     // Constructor
     // ==============================================================================
 
@@ -135,7 +128,45 @@ contract KipuBank {
     }
 
     // ==============================================================================
-    // External Functions
+    // Modificador
+    // ==============================================================================
+
+    /**
+     * @notice Modifier to ensure the sent value is greater than zero.
+     * @dev Validates that msg.value > 0 before executing the function.
+     */
+    modifier nonZeroValue() {
+        if (msg.value == 0) {
+            revert KipuBank__ZeroDeposit();
+        }
+        _;
+    }
+
+    /**
+     * @notice Modifier to validate withdrawal conditions.
+     * @dev Checks that amount is non-zero, within threshold, and user has sufficient funds.
+     * @param _amount The amount to withdraw.
+     */
+    modifier validWithdrawal(uint256 _amount) {
+        if (_amount == 0) {
+            revert KipuBank__ZeroWithdrawal();
+        }
+        
+        if (_amount > withdrawalThreshold) {
+            revert KipuBank__WithdrawalThresholdExceeded(withdrawalThreshold);
+        }
+
+        // Single read from storage
+        uint256 userBalance = vaultBalances[msg.sender];
+        
+        if (_amount > userBalance) {
+            revert KipuBank__InsufficientFunds(userBalance);
+        }
+        _;
+    }
+
+    // ==============================================================================
+    // Función external payable
     // ==============================================================================
 
     /**
@@ -154,8 +185,15 @@ contract KipuBank {
         }
 
         // --- Effects ---
-        vaultBalances[msg.sender] += msg.value;
-        depositCount++;
+        // Single read + single write to storage
+        uint256 userVaultBalance = vaultBalances[msg.sender];
+        
+        unchecked {
+            // Safe: we already checked newBalance won't overflow bankCap
+            vaultBalances[msg.sender] = userVaultBalance + msg.value;
+            // Safe: depositCount won't realistically overflow uint256
+            depositCount++;
+        }
 
         // --- Interactions ---
         // (No external interactions in this function)
@@ -163,29 +201,29 @@ contract KipuBank {
         emit Deposit(msg.sender, msg.value);
     }
 
+    // ==============================================================================
+    // Función external (con modifier)
+    // ==============================================================================
+
     /**
      * @notice Allows a user to withdraw ETH from their vault.
      * @param _amount The amount of ETH to withdraw.
      * @dev Follows the 'checks-effects-interactions' pattern.
      */
-    function withdraw(uint256 _amount) external {
+    function withdraw(uint256 _amount) external validWithdrawal(_amount) {
         // --- Checks ---
-        if (_amount == 0) {
-            revert KipuBank__ZeroWithdrawal();
-        }
-        
-        uint256 userBalance = vaultBalances[msg.sender];
-        if (_amount > userBalance) {
-            revert KipuBank__InsufficientFunds(userBalance);
-        }
-        
-        if (_amount > withdrawalThreshold) {
-            revert KipuBank__WithdrawalThresholdExceeded(withdrawalThreshold);
-        }
+        // (Already validated in modifier)
 
         // --- Effects ---
-        vaultBalances[msg.sender] -= _amount;
-        withdrawalCount++;
+        // Single read + single write to storage
+        uint256 userBalance = vaultBalances[msg.sender];
+        
+        unchecked {
+            // Safe: modifier already checked _amount <= userBalance
+            vaultBalances[msg.sender] = userBalance - _amount;
+            // Safe: withdrawalCount won't realistically overflow uint256
+            withdrawalCount++;
+        }
 
         // --- Interactions ---
         _safeTransfer(msg.sender, _amount);
@@ -194,7 +232,7 @@ contract KipuBank {
     }
 
     // ==============================================================================
-    // View Functions
+    // Función external view
     // ==============================================================================
 
     /**
@@ -215,7 +253,7 @@ contract KipuBank {
     }
 
     // ==============================================================================
-    // Private Functions
+    // Función privada
     // ==============================================================================
 
     /**
